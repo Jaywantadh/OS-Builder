@@ -5,6 +5,9 @@
 CODE_OFFSET equ 0x8  ; Set the code segment offset to 0x8
 DATA_OFFSET equ 0x10 ; Set the data segment offset to 0x10
 
+KERNEL_LOAD_SEG equ 0x1000
+KERNEL_START_ADDR equ 0x100000
+
 start:
     cli             ; Clear Interrrupts
     mov ax, 0x00    ; Load the value 0x00 into the AX register
@@ -12,8 +15,24 @@ start:
     mov es, ax      ; Set the extra segment (ES) to 0x00, same as DS
     mov ss, ax      ; Set the stack segment (SS) to 0x00, same as DS
     mov sp, 0x7c00  ; Set the stack pointer (SP) to 0x7C00, top of the bootloader segment (avoiding overlap with code)
-    sti             ; Enables interrupts
-    mov si, msg     ; Enable interrupts, allowing them to occur again after the setup is complete
+    sti             ; Enable interrupts, allowing them to occur again after the setup is complete
+
+
+;LOAD Kernel
+mov bx, KERNEL_LOAD_SEG
+mov dh, 0x00
+mov dl, 0x00
+mov cl, 0x02
+mov ch, 0x00
+mov ah, 0x02
+mov al, 8
+int 0x13
+
+jc disk_read_error
+
+
+
+
 
 load_PM:
     cli              ; Clear interrupts again before entering protected mode
@@ -22,6 +41,10 @@ load_PM:
     or al, 1         ; Set the lowest bit of EAX to 1 to enable protected mode
     mov cr0, eax     ; Move the modified value back into CR0, enabling protected mode
     jmp CODE_OFFSET:PModeMain ; Far jump to switch to the new code segment defined in the GDT
+
+
+disk_read_error:
+    hlt
 
 ;GDT Implementation
 
@@ -68,7 +91,7 @@ PModeMain:
     or al, 2            ; Set bit 1 of AL to enable A20 line (necessary for access to memory above 1 MB)
     out 0x92, al        ; Write the modified value back to I/O port 0x92
 
-    jmp $               ; Infinite loop to halt execution (keeps the CPU in this state)
+    jmp CODE_OFFSET:KERNEL_START_ADDR               ; Infinite loop to halt execution (keeps the CPU in this state)
 
 times 510 - ($ - $$) db 0  ; Fill the rest of the boot sector with zeros up to 510 bytes
 
